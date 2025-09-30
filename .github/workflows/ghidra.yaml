@@ -2,14 +2,23 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   ghidra:
-    runs-on: macos-13
+    strategy:
+      fail-fast: true
+      matrix:
+        runner:
+          - macos-15-large # macOS 15 Intel: https://github.com/actions/runner-images/blob/main/images/macos/macos-15-Readme.md
+          - macos-26-xlarge # macOS 26 Arm64: https://github.com/actions/runner-images/blob/main/images/macos/macos-26-arm64-Readme.md
+
+    runs-on: ${{ matrix.runner }}
     permissions: write-all
 
     steps:
-      - uses: actions/checkout@v4
+      # https://github.com/actions/checkout
+      - uses: actions/checkout@v5
         with:
           repository: NationalSecurityAgency/ghidra
           ref: master
@@ -21,26 +30,29 @@ jobs:
           xcodebuild -version
           system_profiler SPHardwareDataType
 
-      - uses: actions/setup-java@v4
+      # https://github.com/actions/setup-java
+      - uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '21'
+          check-latest: true
           cache: 'gradle'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+      # # https://github.com/gradle/actions
+      # - name: Setup Gradle
+      #   uses: gradle/actions/setup-gradle@v4
 
       - name: Setup ghidra dependencies
         run: |
-          gradle --quiet --init-script gradle/support/fetchDependencies.gradle
+          ./gradlew --quiet --init-script gradle/support/fetchDependencies.gradle
 
       - name: Build ghidra
         run: |
-          gradle --build-cache --parallel --warning-mode none buildGhidra
+          ./gradlew --build-cache --no-parallel --warning-mode none buildGhidra
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ghidra
+          name: ghidra-${{ runner.arch }}
           path: build/dist/
           retention-days: 1
           include-hidden-files: true
